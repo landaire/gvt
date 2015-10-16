@@ -31,6 +31,7 @@ var commands = []*Command{
 	cmdUpdate,
 	cmdList,
 	cmdDelete,
+	cmdImports,
 }
 
 func main() {
