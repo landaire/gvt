@@ -14,6 +14,7 @@ import (
 	"github.com/FiloSottile/gvt/gbvendor"
 	"path"
 	"time"
+	"log"
 )
 
 func addImportsFlags(fs *flag.FlagSet) {
@@ -94,8 +95,6 @@ func imports(rootDir string, dir string, manifest *vendor.Manifest) error {
 	// recursively fetch their dependencies
 	for _, pkg := range filteredImports {
 		if manifest.HasImportpath(pkg) {
-			fmt.Printf("%s already vendored\n", pkg)
-
 			continue
 		}
 
@@ -104,11 +103,16 @@ func imports(rootDir string, dir string, manifest *vendor.Manifest) error {
 			<-time.After(5 * time.Second)
 		}
 
+		log.Println("Pulling ", pkg)
+
+		// we chdir before and after pulling the dependency because a lot of the operations are
+		// dependent upon the working directory. Since we're in the project's vendor/** directory,
+		// we need to chdir back up to the project root in order to ensure that whatever dependency
+		// we are pulling is placed in the root vendor dir
 		os.Chdir(rootDir)
 		if err := pullDependency(manifest, pkg); err != nil {
 			return err
 		}
-
 		os.Chdir(dir)
 
 		os.Chdir(path.Join(vendorDir(), pkg))
@@ -189,8 +193,6 @@ func sourceFileImports(path string) ([]string, error) {
 
 // Filters imports to only be remote dependencies
 func packageIsRemoteDependency(name string) bool {
-	fmt.Println(name)
-
 	if build.IsLocalImport(name) {
 		return false
 	}
