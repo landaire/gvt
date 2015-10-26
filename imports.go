@@ -132,6 +132,14 @@ func importWorker(path string, imports map[string]bool) error {
 			return fmt.Errorf("Could not walk in dir %s: %s", path, err)
 		}
 
+		testSuffixes := []string {"_tests", "tests", "testdata", "_testdata"};
+
+		for _, suffix := range testSuffixes {
+			if strings.HasSuffix(path, suffix) {
+				return filepath.SkipDir
+			}
+		}
+
 		if !strings.HasSuffix(f.Name(), ".go") {
 			return nil
 		}
