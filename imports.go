@@ -11,6 +11,9 @@ import (
 
 	"go/build"
 	"net/url"
+	"github.com/FiloSottile/gvt/gbvendor"
+	"path"
+	"time"
 )
 
 func addImportsFlags(fs *flag.FlagSet) {
@@ -40,29 +43,84 @@ Flags:
 			return err
 		}
 
-		return imports(workingDir)
+		// "reset" the vendor dir/manifest since it's all being rebuilt
+		if err := os.RemoveAll(vendorDir()); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+
+		manifest, err := vendor.ReadManifest(manifestFile())
+		if err != nil {
+			return err
+		}
+
+		if err := imports(workingDir, true, manifest); err != nil {
+			return err
+		}
+
+		return vendor.WriteManifest(manifestFile(), manifest)
 	},
 	AddFlags: addImportsFlags,
 }
 
-func imports(path string) error {
+// function which recursively fetches and vendors dependencies
+func imports(dir string, isRoot bool, manifest *vendor.Manifest) error {
 	// we use a map here to prevent adding duplicates
-	imports := make(map[string]bool)
+	usedImports := make(map[string]bool)
 
-	// Recursively gather imports
-	if err := importWorker(path, imports); err != nil {
-		return err
+
+	vendorDirExists := true
+	if _, err := os.Stat(vendorDir()); os.IsNotExist(err) {
+		vendorDirExists = false
+	}
+
+	// If we're in the project root then we're rebuilding the vendor dir and should use the importWorker.
+	// If we're in a vendored project and the vendor dir does not exist, then the same method needs to be used
+	// and the dependencies added to the project's manifest
+	if isRoot || !vendorDirExists {
+		// Recursively gather imports
+		if err := importWorker(dir, usedImports); err != nil {
+			return err
+		}
 	}
 
 	var filteredImports []string
 
-	for path, _ := range imports {
+	for path, _ := range usedImports {
 		if packageIsRemoteDependency(path) {
 			filteredImports = append(filteredImports, path)
 		}
 	}
 
-	fmt.Printf("%#v", filteredImports)
+	// now that we have potential remote imports, let's try to fetch them and then
+	// recursively fetch their dependencies
+	for _, pkg := range filteredImports {
+		if
+
+
+		if manifest.HasImportpath(pkg) {
+			fmt.Printf("%s already vendored\n", pkg)
+
+			continue
+		}
+
+		// pull the dependency
+		if strings.HasPrefix(pkg, "github.com") {
+			<-time.After(5 * time.Second)
+		}
+
+		if err := pullDependency(manifest, pkg); err != nil {
+			return err
+		}
+
+		os.Chdir(path.Join(vendorDir(), pkg))
+
+		workingDir, _ := os.Getwd()
+		if err := imports(workingDir, false, manifest); err != nil {
+			return err
+		}
+	}
+
+	os.Chdir(dir)
 
 	return nil
 }

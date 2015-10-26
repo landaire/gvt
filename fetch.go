@@ -78,59 +78,13 @@ func fetch(path string, recurse bool) error {
 		return fmt.Errorf("could not load manifest: %v", err)
 	}
 
-	repo, extra, err := vendor.DeduceRemoteRepo(path, insecure)
-	if err != nil {
+	if err := pullDependency(m, path); err != nil {
 		return err
 	}
 
-	// strip of any scheme portion from the path, it is already
-	// encoded in the repo.
 	path = stripscheme(path)
 
-	if m.HasImportpath(path) {
-		return fmt.Errorf("%s is already vendored", path)
-	}
-
-	wc, err := repo.Checkout(branch, tag, revision)
-
-	if err != nil {
-		return err
-	}
-
-	rev, err := wc.Revision()
-	if err != nil {
-		return err
-	}
-
-	branch, err := wc.Branch()
-	if err != nil {
-		return err
-	}
-
-	dep := vendor.Dependency{
-		Importpath: path,
-		Repository: repo.URL(),
-		Revision:   rev,
-		Branch:     branch,
-		Path:       extra,
-	}
-
-	if err := m.AddDependency(dep); err != nil {
-		return err
-	}
-
-	dst := filepath.Join(vendorDir(), dep.Importpath)
-	src := filepath.Join(wc.Dir(), dep.Path)
-
-	if err := vendor.Copypath(dst, src); err != nil {
-		return err
-	}
-
 	if err := vendor.WriteManifest(manifestFile(), m); err != nil {
-		return err
-	}
-
-	if err := wc.Destroy(); err != nil {
 		return err
 	}
 
@@ -185,6 +139,62 @@ func fetch(path string, recurse bool) error {
 				return err
 			}
 		}
+	}
+
+	return nil
+}
+
+func pullDependency(m *vendor.Manifest, path string) error {
+	repo, extra, err := vendor.DeduceRemoteRepo(path, insecure)
+	if err != nil {
+		return err
+	}
+
+	// strip of any scheme portion from the path, it is already
+	// encoded in the repo.
+	path = stripscheme(path)
+
+	if m.HasImportpath(path) {
+		return fmt.Errorf("%s is already vendored", path)
+	}
+
+	wc, err := repo.Checkout(branch, tag, revision)
+
+	if err != nil {
+		return err
+	}
+
+	rev, err := wc.Revision()
+	if err != nil {
+		return err
+	}
+
+	branch, err := wc.Branch()
+	if err != nil {
+		return err
+	}
+
+	dep := vendor.Dependency{
+		Importpath: path,
+		Repository: repo.URL(),
+		Revision:   rev,
+		Branch:     branch,
+		Path:       extra,
+	}
+
+	if err := m.AddDependency(dep); err != nil {
+		return err
+	}
+
+	dst := filepath.Join(vendorDir(), dep.Importpath)
+	src := filepath.Join(wc.Dir(), dep.Path)
+
+	if err := vendor.Copypath(dst, src); err != nil {
+		return err
+	}
+
+	if err := wc.Destroy(); err != nil {
+		return err
 	}
 
 	return nil
