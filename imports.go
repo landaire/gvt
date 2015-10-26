@@ -53,7 +53,7 @@ Flags:
 			return err
 		}
 
-		if err := imports(workingDir, true, manifest); err != nil {
+		if err := imports(workingDir, workingDir, manifest); err != nil {
 			return err
 		}
 
@@ -63,10 +63,9 @@ Flags:
 }
 
 // function which recursively fetches and vendors dependencies
-func imports(dir string, isRoot bool, manifest *vendor.Manifest) error {
+func imports(rootDir string, dir string, manifest *vendor.Manifest) error {
 	// we use a map here to prevent adding duplicates
 	usedImports := make(map[string]bool)
-
 
 	vendorDirExists := true
 	if _, err := os.Stat(vendorDir()); os.IsNotExist(err) {
@@ -76,7 +75,7 @@ func imports(dir string, isRoot bool, manifest *vendor.Manifest) error {
 	// If we're in the project root then we're rebuilding the vendor dir and should use the importWorker.
 	// If we're in a vendored project and the vendor dir does not exist, then the same method needs to be used
 	// and the dependencies added to the project's manifest
-	if isRoot || !vendorDirExists {
+	if rootDir == dir || !vendorDirExists {
 		// Recursively gather imports
 		if err := importWorker(dir, usedImports); err != nil {
 			return err
@@ -94,9 +93,6 @@ func imports(dir string, isRoot bool, manifest *vendor.Manifest) error {
 	// now that we have potential remote imports, let's try to fetch them and then
 	// recursively fetch their dependencies
 	for _, pkg := range filteredImports {
-		if
-
-
 		if manifest.HasImportpath(pkg) {
 			fmt.Printf("%s already vendored\n", pkg)
 
@@ -108,14 +104,17 @@ func imports(dir string, isRoot bool, manifest *vendor.Manifest) error {
 			<-time.After(5 * time.Second)
 		}
 
+		os.Chdir(rootDir)
 		if err := pullDependency(manifest, pkg); err != nil {
 			return err
 		}
 
+		os.Chdir(dir)
+
 		os.Chdir(path.Join(vendorDir(), pkg))
 
 		workingDir, _ := os.Getwd()
-		if err := imports(workingDir, false, manifest); err != nil {
+		if err := imports(rootDir, workingDir, manifest); err != nil {
 			return err
 		}
 	}
